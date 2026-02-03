@@ -1,15 +1,14 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, UploadFile, File
 from sqlalchemy.orm import Session
 from database import SessionLocal, engine
 import models
+import ai_engine  # We import our new AI brain
 
-# 1. Create the database tables automatically
+# Create tables
 models.Base.metadata.create_all(bind=engine)
 
-# 2. Initialize the App
 app = FastAPI()
 
-# Dependency to get the database session
 def get_db():
     db = SessionLocal()
     try:
@@ -17,22 +16,35 @@ def get_db():
     finally:
         db.close()
 
-# 3. Simple API Routes (Endpoints)
-
 @app.get("/")
 def read_root():
-    return {"message": "Smart Internship Allocation Engine is Running!"}
+    return {"message": "Smart Internship AI is Active"}
+
+# --- Student Routes ---
 
 @app.post("/students/")
 def create_student(name: str, email: str, skills: str, db: Session = Depends(get_db)):
-    # Create a new student object
     new_student = models.Student(name=name, email=email, skills=skills)
-    # Add to DB
     db.add(new_student)
     db.commit()
     db.refresh(new_student)
     return new_student
 
-@app.get("/students/")
-def read_students(db: Session = Depends(get_db)):
-    return db.query(models.Student).all()
+@app.post("/upload_resume/")
+async def upload_resume(file: UploadFile = File(...)):
+    # 1. Read the uploaded file
+    content = await file.read()
+    
+    # 2. Use our AI Engine to extract text
+    resume_text = ai_engine.extract_text_from_pdf(content)
+    
+    # 3. (Demo) Let's match it against a fake job description to test
+    sample_job_skills = "Python, Data Science, Machine Learning, SQL"
+    match_score = ai_engine.calculate_match_score(resume_text, sample_job_skills)
+    
+    return {
+        "filename": file.filename,
+        "extracted_text_snippet": resume_text[:200] + "...", # Show first 200 chars
+        "match_score": match_score,
+        "matched_against": sample_job_skills
+    }
